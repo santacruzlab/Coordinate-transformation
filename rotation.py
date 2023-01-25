@@ -1,5 +1,3 @@
-''' This script calculates the transformation between the stereotax coordinates and the atlas coordinates. '''
-
 import numpy as np
 
 pi, sin, cos, atan = np.pi, np.sin, np.cos, np.arctan2
