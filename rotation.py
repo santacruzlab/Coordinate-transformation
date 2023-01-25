@@ -1,12 +1,11 @@
-'''
-
-This script calculates the transformation between the stereotax coordinates and the atlas coordinates.
-
-
-
-'''
+''' This script calculates the transformation between the stereotax coordinates and the atlas coordinates. '''
 
 import numpy as np
+
+pi, sin, cos, atan = np.pi, np.sin, np.cos, np.arctan2
+
+toAngle  = lambda rad: rad*180/pi
+toRadian = lambda ang: ang*pi/180
 
 
 def rotation_main(start, target):
@@ -74,15 +73,6 @@ def spherical_cartesian(r,theta,phi):
     
     return x,y,z
     
-
-
-
-#%%
-
-pi, sin, cos, atan = np.pi, np.sin, np.cos, np.arctan2
-
-toAngle  = lambda rad: rad*180/pi
-toRadian = lambda ang: ang*pi/180
 
 def cartesian_spherical(x,y,z):
     '''
@@ -162,111 +152,7 @@ class stereotax:
         
         return moving
     
-#%%
+## Example
 S = stereotax(-16,20.4,39)
 S.rotate(5,10)
 print(S.move())
-
-"""
-These functions are no longer needed.
-
-
-def Rx(angle):
-    '''
-    Return the rotation matrix about the x axis
-    '''
-    angle /= (180/pi)
-    return np.array([[1,0,0],
-                   [0,cos(angle),-sin(angle)],
-                   [0,sin(angle),cos(angle)]])
- 
-def Rz(angle):
-    '''
-    Return the rotation matrix about the z axis
-    '''
-    angle /= (180/pi)
-    return np.array([[cos(angle),-sin(angle),0],
-                   [sin(angle), cos(angle),0],
-                   [0,0,1]])
-
-def findCoordinate(NP, ML, DV):
-    '''
-    This function calculates the cartesian coordinates wrt the pivot point, which is the rotating center of the x axis. That is, we know NP, and we have to find NPx, NPy, and NPz (x,y,z). There are several variables defined here. 
-    
-    1. Needle tip (N): the point we are interested in. This function will output the coordinate of this point wrt the pivot point.
-    2. Pivot point (P): the rotating center of the x axis. Note that rotating about the z axis also has the same pivot point here. It's the zero (0,0,0).
-    3. Rotating rod (R): The rod of the syringe pump can be rotated. The angle is unknown but that does not matter. If we have the length from N to P (denoted as NP), then we should be able to use trigonometry to find the coordinate without knowing the angle.
-    
-    The measured variables are collected under these assumptions
-    1. Stereotax axes are orthogonal, meaning no rotation is present during calculation.
-    2. ML displacement is 80 mm, meaning the 0 points to the 8 on the ML scale.
-    3. DV displacement is 75 mm, meaning the 0 points to the 7.5 on the DV scale.
-    4. The syringe rod is placed downward and placed to the end. That means the cap of the rotating rod is facing down and there is no gap between the arm adaptor and the bottom of the rod.
-
-    INPUT
-    NP: int, measured distance between N and P in mm.
-    ML: int, the displacement of ML reading on the micromanipulator arm in mm.
-    DV: int, the displacement of DV reading on the micromanipulator arm in mm.  
-    
-    OUTPUT
-    coordinate: list of three items. The (x,y,z) or (AP, ML, DV) coordinates in mm.
-    
-    TODO
-    what if the stereotax is already at an angle?
-    '''
-    
-    # These variables are eyeballed. Not 100% accurate.
-    measured_PRy = 51.5
-    measured_NPz = 31.2
-    measured_NR  = 67.6
-    measured_ML_displacement = 80.0
-    measured_DV_displacement = 75.0
-    
-    # These variables are derived.
-    theta = sp.symbols('theta')
-    NPz = DV - measured_NPz - measured_DV_displacement
-    NPy = measured_PRy + measured_ML_displacement - ML + measured_NR * sp.cos(theta)
-    NPx = measured_NR * sp.sin(theta)
-    
-    # Solve the theta using sympy
-    sol = sp.solve( NP**2 - NPz**2 - NPy**2 - NPx**2 )
-    
-    # Apply the theta to NPy and NPx
-    theta = float(sol[1])
-    NPy = measured_PRy + measured_ML_displacement - ML + measured_NR * cos(theta)
-    NPx = measured_NR * sin(theta)
-    
-    NPx,NPy,NPz = round(NPx,2),round(NPy,2),round(NPz,2)
-    
-    return theta*180/pi, [NPx,NPy,NPz]
-    
-
-def moveAfterRotation(rotate, start):
-    '''
-    This function calculates how far to move in each axis after rotation. The coordinate based on the new basis is calculated by the inverse of the basis @ the original coordinate.
-    
-    INPUT
-    rotate: numpy array of 3x3, the rotation matrix applied to the manipulator arm.
-    start:  list of three items, the starting point (x,y,z) wrt to the pivot point that will be rotated. 
-    
-    OUPTUT
-    move: numpy array of 1x3, the movement corresponding to the new basis.
-    '''
-    
-    # New basis for each axis
-    x = [1,0,0]
-    y = rotate @ [0,1,0]
-    z = rotate @ [0,0,1]
-    basis = np.array([x,y,z]).T
-    
-    # Inverse of the basis
-    inv_basis = np.linalg.inv(basis)
-    
-    # Calculate the end point and the movement required to reset the position.
-    end  = rotate @ start
-    move = inv_basis @ (end-start)
-    
-    return move
-
-
-"""
