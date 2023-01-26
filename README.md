@@ -7,6 +7,28 @@ Author: Hung-Yun Lu, Cole R Barnett
 ## Why do we need this?
 If we want to move the micromanipulator arm at an desired angle and a specific position, we will need to rotate it to that angle, and manage to move it back to the original position. Although it's easy to calculate the angle, it's not as straightforward to move back to the original starting position since the axes are no longer orthogonal. We need a way to precisely and reliably calculate by how much we need to move in each direction so that we can reach the original point in rotated axes.
 
+## How to use this?
+1. Define the starting and ending point in the atlas. Use the `rotation_main()` function to output the angles and the distance. Point the needle tip to the starting point. Record the AP, ML, and DV values from the stereotax.
+2. Instantiate `stereotax` using those coordinates as arguments.
+3. Use the `rotate(theta,phi)` function to rotate.
+4. Use the `moveback()` function to output how to reach the starting point from the new position.
+5. Follow the print statements.
+
+## Unreachable points
+Due to the limitations of the micromanipulator arm, there are some points that is unable to reach. This can happen if the angles are too big. The unreachable points are also accounted for in the script in the `moveback()` function.
+
+``` Python
+## Example
+S = stereotax(-16,20.4,39) # Starting point
+S.rotate(5,10) # Rotate 5 and 10 degrees in polar and azimuthal angles.
+S.moveback()
+
+## Output
+# Move x (AP) to 0.3860302773050037
+# Move y (ML) to 29.347187670374133
+# Move z (DV) to 33.18444426078773
+```
+
 ## Understanding the stereotax
 In our lab, we use the stereotax from Stoelting (ITEM 51804 and 51806). We define the cartesian axes as follows.
 
@@ -14,10 +36,11 @@ In our lab, we use the stereotax from Stoelting (ITEM 51804 and 51806). We defin
 - y axis corresponds to the ML direction
 - z axis corresponds to the DV direction
 
-For the directionality to work, positive x points to the posterior of the animal; positive y points to the medial; and positive z points dorsally.
+In order to define meaningful directionality that matches the anatomical definition, positive x points to the anterior of the animal and positive z points dorsally. Positive y is more tricky. From the manipulator arm perspective, positive is toward the medial of the animal, but it's toward the lateral from the animal's perspective. The situation changes if the manipulator arm crosses the sagital line. However, that kind of situation is rare (reaching a point from the distant hemisphere). Therefore, for normal situations, the manipulator arm direction is opposite from the atlas direction. The calculation is based on the manipulator arm perspective - **positive y points to the medial**. We just need to address this issue while calculating the angle prior to rotation (see the `rotation_main` function). For example, if moving from (20,15,30) to (20,23,25), the change in y should be regarded as -8 for the micromanipulator arm.
 
-There are two rotational angles from this stereotax, which are the azimuthal angle and the polar angle. Azimuthal angles are the angles with `y=0` on the xy plane, while polar angles are with `z=0`.
+There are two rotational angles from this stereotax, which are the azimuthal angle (phi) and the polar angle (theta). These angles are shown in the demonstration figure.
 
+![stereorax](stereotax.png)
 
 ## Coordinate transformation
 Any point described in the cartesian coordinate `(x,y,z)` can be transformed into a spherical coordinate `(r,theta,phi)`.
@@ -36,10 +59,10 @@ def cartesian_spherical(x,y,z):
     return r,theta,phi
 ```
 
-Also, transferring between radians and angles are easy.
+Also, transferring between radians and degrees are easy.
 
 ``` Python
-toAngle  = lambda rad: rad * 180 / np.pi
+toDegree = lambda rad: rad * 180 / np.pi
 toRadian = lambda ang: ang * np.pi / 180
 ```
 
@@ -62,7 +85,7 @@ To know the cartesian coordinate of a point to the polar joint, we first need to
 def spherical_cartesian(r,theta,phi):
     '''
     Tranform from spherical to cartesian coordinates.
-    theta and phi are in angles
+    theta and phi are in degrees
     '''
     theta = toRadian(theta)
     phi = toRadian(phi)
@@ -73,6 +96,7 @@ def spherical_cartesian(r,theta,phi):
 
     return x,y,z
 ```
+
 4. **VERY IMPORTANT!** Calculate the change of coordinate. Since the axes are no longer in the original places, thus we cannot move along the original xyz axes. The easiest way is to change the basis of the cartesian system, and then find the coordinates of the starting position and the current position expressed in the new system. The math is denoted in the document *Mathematical basics of stereotax rotation*. The implementation of this step is to rotate the y and z unit vector ((0,1,0) and (0,0,1)) using the same method to get y' and z'. Then use the original x unit vector and the new y'z' unit vectors to form a new basis.
 5. Moving back to the original point. Because of the design of the arm, the moving logics are not the same.
 - For x and z' axis, if the function indicates moving positively, we can move the direction that points to the positive.
