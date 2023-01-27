@@ -8,26 +8,14 @@ Author: Hung-Yun Lu, Cole R Barnett
 If we want to move the micromanipulator arm at an desired angle and a specific position, we will need to rotate it to that angle, and manage to move it back to the original position. Although it's easy to calculate the angle, it's not as straightforward to move back to the original starting position since the axes are no longer orthogonal. We need a way to precisely and reliably calculate by how much we need to move in each direction so that we can reach the original point in rotated axes.
 
 ## How to use this?
-1. Define the starting and ending point in the atlas. Use the `rotation_main()` function to output the angles and the distance. Point the needle tip to the starting point. Record the AP, ML, and DV values from the stereotax.
-2. Instantiate `stereotax` using those coordinates as arguments.
-3. Use the `rotate(theta,phi)` function to rotate.
-4. Use the `moveback()` function to output how to reach the starting point from the new position.
-5. Follow the print statements.
+1. Define the reference point. The motivation of this step is explained in the `reference()` function. In brief, we need a point to translate between the atlas coordinate and the stereotax coordinate.
+2. Calculate the difference (or `diff` in the function).
+3. Define the starting and ending point of interest from the **atlas** (or `start_atlas` and `target_atlas`).
+4. Change those numbers in the `example.py` file.
+5. Run it to see if it outputs an instruction. Unreachable points are also considered.
 
 ## Unreachable points
-Due to the limitations of the micromanipulator arm, there are some points that is unable to reach. This can happen if the angles are too big. The unreachable points are also accounted for in the script in the `moveback()` function.
-
-``` Python
-## Example
-S = stereotax(-16,20.4,39) # Starting point
-S.rotate(5,10) # Rotate 5 and 10 degrees in polar and azimuthal angles.
-S.moveback()
-
-## Output
-# Move x (AP) to 0.3860302773050037
-# Move y (ML) to 29.347187670374133
-# Move z (DV) to 33.18444426078773
-```
+Due to the limitations of the micromanipulator arm, there are some points that is unable to reach. This can happen if the angles are too big or the arms have already at their very edge (thus not much space for movement). The unreachable points are also accounted for in the script in the `moveback()` function.
 
 ## Understanding the stereotax
 In our lab, we use the stereotax from Stoelting (ITEM 51804 and 51806). We define the cartesian axes as follows.
