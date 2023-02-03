@@ -1,3 +1,20 @@
+'''
+
+Rotation using Rodrigue's Rotation Formula
+
+Rodrigues' rotation calculates the vector that rotates about an arbitrary angle by right-hand rule.
+Thus, the rotation of the micromanipulator arm can be streamline into two steps.
+
+1. Rotating the azimuthal angle (phi):
+    1) The vector to be rotated is the cartesian coordinate of the tip wrt the pivot point.
+    2) The axis is positive z axis
+    
+2. Rotating the polar angle (theta):
+    1) The vector is already rotated once and will be rotated again.
+    2) The axis for rotating polar angle is [-1,0,0] but has to rotate phi first.
+
+'''
+
 import numpy as np
 
 pi, sin, cos, atan = np.pi, np.sin, np.cos, np.arctan2
@@ -24,7 +41,7 @@ def reference(diff,atlas):
     return stereo
 
 
-def rotation_main(start,target):
+def determine_angle(start,target):
     '''
     This basic function assumes the entire micromanipulator arm + syringe pump is a point.
     Rotating in both axes does not result in displacement in AP or ML.
@@ -67,6 +84,21 @@ def rotation_main(start,target):
     return theta,phi
 
 
+def spherical_cartesian(r,theta,phi):
+    '''
+    Tranform from spherical to cartesian coordinates.
+    theta and phi are in angles
+    '''
+    theta = toRadian(theta)
+    phi = toRadian(phi)
+
+    x = r * cos(theta) * cos(phi)
+    y = r * cos(theta) * sin(phi)
+    z = r * sin(theta)
+
+    return x,y,z
+
+
 def azimuthal(angle=0,length=0):
     '''
     The scale of the azimuthal angles on the micromanipulator arm is in INCH instead of degree.
@@ -94,31 +126,34 @@ def azimuthal(angle=0,length=0):
     print(f'Angle {angle:.2f} corresponds to {length:.2f} inch or {length*10:.1f} big gaps.')
 
 
-def spherical_cartesian(r,theta,phi):
+def rodrigue(vector,axis,angle):
     '''
-    Tranform from spherical to cartesian coordinates.
-    theta and phi are in angles
+    Applying Rodrigues' rotation formula.
+    https://en.wikipedia.org/wiki/Rodrigues%27_rotation_formula
+    
+    INPUT
+    vector, axis: list of three items.
+    angle: int, in degrees.
+    
+    OUTPUT
+    v_rot: list of three items, 
     '''
-    theta = toRadian(theta)
-    phi = toRadian(phi)
-
-    x = r * cos(theta) * cos(phi)
-    y = r * cos(theta) * sin(phi)
-    z = r * sin(theta)
-
-    return x,y,z
-
-
-def cartesian_spherical(x,y,z):
-    '''
-    Tranform from cartesian to spherical coordinates.
-    theta and phi are in angles
-    '''
-    r   = np.sqrt( x**2 + y**2 + z**2 )
-    dxy = np.sqrt( x**2 + y**2 )
-    theta = atan(z,dxy) # angle with the z=0 plane
-    phi   = atan(y,x)  # angle on the xy plane
-    return r, toDegree(theta), toDegree(phi)
+    
+    angle = toRadian(angle)
+    
+    ## Define the cross-product matrix
+    K = np.array([[0,-axis[2],axis[1]],
+                  [axis[2],0,-axis[0]],
+                  [-axis[1],axis[0],0]])
+    
+    ## Define the rotation matrix about k
+    I = np.eye(3)
+    R = I + sin(angle) * K + (1-cos(angle))* K @ K
+    
+    ## Rotate
+    v_rot = R @ vector
+    
+    return v_rot
 
 
 class stereotax:
@@ -126,67 +161,88 @@ class stereotax:
     dx, dy, dz = -25.4, 123.8, -105
 
     def __init__(self,AP,ML,DV):
-        '''
-        Adjust the xyz distance so that when we plug in the read number on the stereotax,
-        it shows the actually coordinate relative to the pivot point.
-        '''
-        self.original = [AP,ML,DV]
+        
+        ## Original stereotax coordinate
+        self.coordinate = [AP,ML,DV]
+        
+        ## The cartesian coordinate of the starting position
         self.x = stereotax.dx
         self.y = stereotax.dy - ML
         self.z = stereotax.dz + DV
-
+        
         ## The micromanipulator arm basis
         self.ex = [1,0,0]
         self.ey = [0,1,0]
         self.ez = [0,0,1]
-
-        self.spherical # Call to pull out r, theta, and phi
-        self.before = self.cartesian
-
-
+    
+        ## Store the starting point
+        self.start = self.cartesian
+    
+    
     @property
     def cartesian(self):
         return round(self.x,2), round(self.y,2), round(self.z,2)
 
-
-    @property
-    def spherical(self):
-        '''theta and phi are in angles'''
-        self.r, self.theta, self.phi = cartesian_spherical(self.x, self.y, self.z)
-        return round(self.r,2), round(self.theta,2), round(self.phi,2)
-
-
     @property
     def basis(self):
         return np.array([self.ex,self.ey,self.ez]).T
+    
 
-
-    def rotate(self,theta,phi):
+    def rotate(self, theta, phi):
         
-        self.theta += theta
-        self.phi += phi
-
-        ## Rotate the unit vectors
-        self.ex = [1,0,0]
-        self.ey = spherical_cartesian(1, 0+theta, 90+phi)
-        self.ez = spherical_cartesian(1, 90+theta, 90+phi)
+        ## First rotating about azimuthal axis
+        self.x, self.y, self.z = rodrigue(self.cartesian, [0,0,1], phi)
         
-        ## Move along the unit vectors by the original displacements
-        self.x, self.y, self.z = self.basis @ self.cartesian
-
-
+        ## Also need to rotate for the new axis
+        new_axis = rodrigue([-1,0,0], [0,0,1], phi)
+        
+        ## Next, rotate about polar axis
+        self.x, self.y, self.z = rodrigue(self.cartesian, new_axis, theta)
+        
+        ## Rotate the basis
+        self.ey  = rodrigue(self.ey,  [0,0,1], phi)
+        self.ey  = rodrigue(self.ey, new_axis, theta)
+        self.ez  = rodrigue(self.ez, new_axis, theta)
+        
+        ## Store the ending point
+        self.new = self.cartesian
+        
+        
     def moveback(self):
-        '''
-        This function outputs how much to move in each direction in order to reach the strating point.
-        '''
+            
         inv_basis = np.linalg.inv(self.basis)
+        displace  = inv_basis @ (np.array(self.new) - np.array(self.start))
         
-        new_x,new_y,new_z = inv_basis @ np.array(self.before)
+        new_x = self.coordinate[0] + displace[0]
+        new_y = self.coordinate[1] - displace[1]
+        new_z = self.coordinate[2] + displace[2]
         
-        if -100<new_x<100 and 0<new_y<80 and 0<new_z<78:
-            print(f'Move x (AP) to {new_x:.2f}')
-            print(f'Move y (ML) to {new_y:.2f}')
-            print(f'Move z (DV) to {new_z:.2f}')
-        else:
-            print(f'New coordinate: [{new_x:.2f}, {new_y:.2f}, {new_z:.2f}]')
-            print('Unreachable point.')
+        self.coordinate = [round(new_x,2), round(new_y,2), round(new_z,2)]
+        print(f'Move to {self.coordinate}')
+        
+        
+#%%
+
+diff = [28,36,34.5]
+start_atlas  = [20,24,24]
+target_atlas = [19,17,12]
+
+print('Starting point')
+start = reference(diff,start_atlas)
+
+print('Target point')
+end   = reference(diff,target_atlas)
+
+print()
+theta, phi = determine_angle(start=start,target=end)
+print()
+
+
+S = stereotax(*start)
+
+print('Cartesian coordinate before rotation\t', S.cartesian)
+S.rotate(theta,phi)
+print('Cartesian coordinate after rotation\t', S.cartesian)
+
+print()
+S.moveback()
